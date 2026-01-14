@@ -1,39 +1,34 @@
 import { Request, Response, NextFunction } from "express";
 
-/*
-    Dev Note:
-        Does not work,
-        Currently WIP
-        
-*/
+type IPInfo = {
+  count: number;
+  startTime: number;
+};
 
-const ip_manager = new (class ip_manager {
-    ipData: Record<string, any>;
+const ipData: Record<string, IPInfo> = {};
 
-    constructor() {
-        this.ipData = {};
-    }
-
-    whatDoIDo(ip: string, requestPath: string): "pass" | "fail" {
-        if(!this.ipData[ip]) {
-            this.ipData[ip];
-        }
-
-        const info = this.ipData[ip];
-        const now = Date.now();
-
-        if(requestPath.startsWith("/api")) {
-            //info.api_requests.push(now);
-            //console.log("api req");
-        } else {
-            //info.static_requests.push(now);
-            //console.log("static req");
-        }
-
-        return "pass";
-    }
-});
+const LIMIT = 100;       // max requests
+const WINDOW = 60_000;   // 1 minute
 
 export default function ratelimiter(req: Request, res: Response, next: NextFunction) {
-    if(ip_manager.whatDoIDo(req.ip || "", req.path) === "pass") next();
-}
+    const ip = req.ip || "unknown";
+    const now = Date.now();
+    if (!ipData[ip]) {
+        ipData[ip] = { count: 1, startTime: now };
+        return next();
+    }
+    const info = ipData[ip];
+    if (now - info.startTime > WINDOW) {
+        info.count = 1;
+        info.startTime = now;
+        return next();
+    }
+    info.count++;
+    if (info.count > LIMIT) {
+        return res.status(429).json({
+            error: true,
+            message: "Too many requests. Please slow down."
+         });
+        }
+        next();
+    }

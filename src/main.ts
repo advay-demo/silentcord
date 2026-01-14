@@ -355,6 +355,11 @@ app.get("/api/destroy_room", (req, res) => {
 
 // WebSocket connection handler
 wss.on("connection", (ws: WebSocketConnectedClient, req) => {
+    let msgCount = 0;
+    const msgInterval = setInterval(() => {
+        msgCount = 0;
+    }, 1000);
+
     // small one liner to send JSON data to the connected client
     const send = (label: string, data: {} = {}) => { try { ws.send(JSON.stringify([label, data])) } catch (e) { console.log("WebSocket send err:", e) } };
     const close_ws = (reason: string) => {
@@ -401,6 +406,8 @@ wss.on("connection", (ws: WebSocketConnectedClient, req) => {
     }, 5e3);
 
     ws.on("close", () => {
+        clearInterval(msgInterval);
+
         try {
             clearInterval(pingInterval);
         } catch { }
@@ -416,6 +423,14 @@ wss.on("connection", (ws: WebSocketConnectedClient, req) => {
     })
 
     ws.on("message", (rawdata) => {
+        msgCount++;
+        if (msgCount > 20) {
+            forceClosed = true;
+            closeReason = "rate limit exceeded";
+            close_ws(closeReason);
+            return;
+        }
+
         let pkt: [string, Record<string, any>];
         try {
             const rawpktdata = rawdata.toString();
